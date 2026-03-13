@@ -1,12 +1,10 @@
 #ifndef INFINI_OPS_MOORE_ADD_ADD_H_
 #define INFINI_OPS_MOORE_ADD_ADD_H_
 
-#include <cassert>
 #include <cstddef>
 
-#include <musa_runtime_api.h>
-
 #include "base/add.h"
+#include "moore/common.h"
 #include "moore/add/launch.h"
 
 namespace infini::ops {
@@ -20,29 +18,19 @@ class Operator<Add, Device::Type::kMoore> : public Add {
       return;
     }
 
-    ScopedDeviceGuard guard(device_index_);
+    moore_utils::ScopedDeviceGuard guard(device_index_);
     InitializeMetadata();
   }
 
   ~Operator() override {
-    if (d_input_shape_ != nullptr) {
-      musaFree(d_input_shape_);
-    }
-    if (d_other_shape_ != nullptr) {
-      musaFree(d_other_shape_);
-    }
-    if (d_out_shape_ != nullptr) {
-      musaFree(d_out_shape_);
-    }
-    if (d_input_strides_ != nullptr) {
-      musaFree(d_input_strides_);
-    }
-    if (d_other_strides_ != nullptr) {
-      musaFree(d_other_strides_);
-    }
-    if (d_out_strides_ != nullptr) {
-      musaFree(d_out_strides_);
-    }
+    moore_utils::ScopedDeviceGuard guard(device_index_);
+
+    moore_utils::FreeDevice(d_input_shape_);
+    moore_utils::FreeDevice(d_other_shape_);
+    moore_utils::FreeDevice(d_out_shape_);
+    moore_utils::FreeDevice(d_input_strides_);
+    moore_utils::FreeDevice(d_other_strides_);
+    moore_utils::FreeDevice(d_out_strides_);
   }
 
   void operator()(const Tensor input, const Tensor other,
@@ -51,83 +39,67 @@ class Operator<Add, Device::Type::kMoore> : public Add {
       return;
     }
 
-    ScopedDeviceGuard guard(device_index_);
+    moore_utils::ScopedDeviceGuard guard(device_index_);
 
-    auto musa_stream = static_cast<musaStream_t>(stream_ ? stream_ : nullptr);
+    auto musa_stream = moore_utils::GetMusaStream(stream_);
     auto err = add::moore::LaunchAdd(
         input.data(), other.data(), out.data(), d_out_shape_, d_input_shape_,
         d_other_shape_, d_out_strides_, d_input_strides_, d_other_strides_,
         output_size_, ndim_, is_out_contiguous_, is_input_contiguous_,
         is_other_contiguous_, static_cast<int>(out_type_), musa_stream);
 
-    CheckMusa(err, "`LaunchAdd` failed.");
+    moore_utils::CheckMusa(err, "`LaunchAdd` failed.");
   }
 
  private:
-  static void CheckMusa(musaError_t err, const char* msg) {
-    assert((err == musaSuccess) && msg);
-  }
-
   void InitializeMetadata() {
     const auto shape_size = ndim_ * sizeof(Tensor::Size);
     const auto strides_size = ndim_ * sizeof(Tensor::Stride);
 
-    CheckMusa(musaMalloc(reinterpret_cast<void**>(&d_input_shape_), shape_size),
-              "`musaMalloc` failed for `d_input_shape_`.");
-    CheckMusa(musaMalloc(reinterpret_cast<void**>(&d_other_shape_), shape_size),
-              "`musaMalloc` failed for `d_other_shape_`.");
-    CheckMusa(musaMalloc(reinterpret_cast<void**>(&d_out_shape_), shape_size),
-              "`musaMalloc` failed for `d_out_shape_`.");
-    CheckMusa(
+    moore_utils::CheckMusa(
+        musaMalloc(reinterpret_cast<void**>(&d_input_shape_), shape_size),
+        "`musaMalloc` failed for `d_input_shape_`.");
+    moore_utils::CheckMusa(
+        musaMalloc(reinterpret_cast<void**>(&d_other_shape_), shape_size),
+        "`musaMalloc` failed for `d_other_shape_`.");
+    moore_utils::CheckMusa(
+        musaMalloc(reinterpret_cast<void**>(&d_out_shape_), shape_size),
+        "`musaMalloc` failed for `d_out_shape_`.");
+    moore_utils::CheckMusa(
         musaMalloc(reinterpret_cast<void**>(&d_input_strides_), strides_size),
         "`musaMalloc` failed for `d_input_strides_`.");
-    CheckMusa(
+    moore_utils::CheckMusa(
         musaMalloc(reinterpret_cast<void**>(&d_other_strides_), strides_size),
         "`musaMalloc` failed for `d_other_strides_`.");
-    CheckMusa(musaMalloc(reinterpret_cast<void**>(&d_out_strides_), strides_size),
-              "`musaMalloc` failed for `d_out_strides_`.");
+    moore_utils::CheckMusa(
+        musaMalloc(reinterpret_cast<void**>(&d_out_strides_), strides_size),
+        "`musaMalloc` failed for `d_out_strides_`.");
 
-    CheckMusa(musaMemcpy(d_input_shape_, input_shape_.data(), shape_size,
-                         musaMemcpyHostToDevice),
-              "`musaMemcpy` failed for `d_input_shape_`.");
-    CheckMusa(musaMemcpy(d_other_shape_, other_shape_.data(), shape_size,
-                         musaMemcpyHostToDevice),
-              "`musaMemcpy` failed for `d_other_shape_`.");
-    CheckMusa(musaMemcpy(d_out_shape_, out_shape_.data(), shape_size,
-                         musaMemcpyHostToDevice),
-              "`musaMemcpy` failed for `d_out_shape_`.");
-    CheckMusa(musaMemcpy(d_input_strides_, input_strides_.data(), strides_size,
-                         musaMemcpyHostToDevice),
-              "`musaMemcpy` failed for `d_input_strides_`.");
-    CheckMusa(musaMemcpy(d_other_strides_, other_strides_.data(), strides_size,
-                         musaMemcpyHostToDevice),
-              "`musaMemcpy` failed for `d_other_strides_`.");
-    CheckMusa(musaMemcpy(d_out_strides_, out_strides_.data(), strides_size,
-                         musaMemcpyHostToDevice),
-              "`musaMemcpy` failed for `d_out_strides_`.");
+    moore_utils::CheckMusa(
+        musaMemcpy(d_input_shape_, input_shape_.data(), shape_size,
+                   musaMemcpyHostToDevice),
+        "`musaMemcpy` failed for `d_input_shape_`.");
+    moore_utils::CheckMusa(
+        musaMemcpy(d_other_shape_, other_shape_.data(), shape_size,
+                   musaMemcpyHostToDevice),
+        "`musaMemcpy` failed for `d_other_shape_`.");
+    moore_utils::CheckMusa(
+        musaMemcpy(d_out_shape_, out_shape_.data(), shape_size,
+                   musaMemcpyHostToDevice),
+        "`musaMemcpy` failed for `d_out_shape_`.");
+    moore_utils::CheckMusa(
+        musaMemcpy(d_input_strides_, input_strides_.data(), strides_size,
+                   musaMemcpyHostToDevice),
+        "`musaMemcpy` failed for `d_input_strides_`.");
+    moore_utils::CheckMusa(
+        musaMemcpy(d_other_strides_, other_strides_.data(), strides_size,
+                   musaMemcpyHostToDevice),
+        "`musaMemcpy` failed for `d_other_strides_`.");
+    moore_utils::CheckMusa(
+        musaMemcpy(d_out_strides_, out_strides_.data(), strides_size,
+                   musaMemcpyHostToDevice),
+        "`musaMemcpy` failed for `d_out_strides_`.");
   }
-
-  class ScopedDeviceGuard {
-   public:
-    explicit ScopedDeviceGuard(int target_device) : target_{target_device} {
-      if (musaGetDevice(&original_) != musaSuccess) {
-        original_ = -1;
-      }
-      if (target_ >= 0 && target_ != original_) {
-        musaSetDevice(target_);
-      }
-    }
-
-    ~ScopedDeviceGuard() {
-      if (original_ >= 0 && target_ >= 0 && original_ != target_) {
-        musaSetDevice(original_);
-      }
-    }
-
-   private:
-    int original_{-1};
-    int target_{-1};
-  };
 
   int device_index_{0};
 

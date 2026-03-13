@@ -1,11 +1,8 @@
 #ifndef INFINI_OPS_MOORE_RMS_NORM_H_
 #define INFINI_OPS_MOORE_RMS_NORM_H_
 
-#include <cassert>
-
-#include <musa_runtime_api.h>
-
 #include "base/rms_norm.h"
+#include "moore/common.h"
 #include "moore/rms_norm/launch.h"
 
 namespace infini::ops {
@@ -31,9 +28,9 @@ class Operator<RmsNorm, Device::Type::kMoore> : public RmsNorm {
         "Operator `RmsNorm` requires all input and output tensors to have the "
         "same dtype.");
 
-    ScopedDeviceGuard guard(device_index_);
+    moore_utils::ScopedDeviceGuard guard(device_index_);
 
-    auto musa_stream = static_cast<musaStream_t>(stream_ ? stream_ : nullptr);
+    auto musa_stream = moore_utils::GetMusaStream(stream_);
     auto stride_input_batch = input_strides_.size() > 1 ? input_strides_[0] : 0;
     auto stride_input_nhead =
         input_strides_.size() > 1 ? input_strides_[1] : input_strides_[0];
@@ -46,36 +43,10 @@ class Operator<RmsNorm, Device::Type::kMoore> : public RmsNorm {
         stride_out_nhead, stride_input_batch, stride_input_nhead, batch_size_,
         nhead_, dim_, eps, static_cast<int>(out.dtype()), musa_stream);
 
-    CheckMusa(err, "`LaunchRmsNorm` failed.");
+    moore_utils::CheckMusa(err, "`LaunchRmsNorm` failed.");
   }
 
  private:
-  static void CheckMusa(musaError_t err, const char* msg) {
-    assert((err == musaSuccess) && msg);
-  }
-
-  class ScopedDeviceGuard {
-   public:
-    explicit ScopedDeviceGuard(int target_device) : target_{target_device} {
-      if (musaGetDevice(&original_) != musaSuccess) {
-        original_ = -1;
-      }
-      if (target_ >= 0 && target_ != original_) {
-        musaSetDevice(target_);
-      }
-    }
-
-    ~ScopedDeviceGuard() {
-      if (original_ >= 0 && target_ >= 0 && original_ != target_) {
-        musaSetDevice(original_);
-      }
-    }
-
-   private:
-    int original_{-1};
-    int target_{-1};
-  };
-
   int device_index_{0};
 };
 
