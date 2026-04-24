@@ -1,6 +1,7 @@
 #ifndef INFINI_OPS_CUDA_RMS_NORM_KERNEL_H_
 #define INFINI_OPS_CUDA_RMS_NORM_KERNEL_H_
 
+#include <algorithm>
 #include <cassert>
 #include <cstdint>
 
@@ -34,10 +35,14 @@ class CudaRmsNorm : public RmsNorm {
 
     assert(out.dtype() == input.dtype() && out.dtype() == weight.dtype());
 
-    int block_size = RuntimeUtils<Backend::kDeviceType>::GetOptimalBlockSize();
+    constexpr int kMaxBlockSize = BackendMaxBlockSize<Backend>::value;
+    int block_size =
+        std::min(RuntimeUtils<Backend::kDeviceType>::GetOptimalBlockSize(),
+                 kMaxBlockSize);
 
-    DispatchFunc<ConcatType<List<DataType::kFloat32>, ReducedFloatTypes>,
-                 AllCudaBlockSizes>(
+    DispatchFunc<
+        ConcatType<List<DataType::kFloat32>, ReducedFloatTypes>,
+        SupportedCudaBlockSizesType<BackendMaxBlockSize<Backend>::value>>(
         {static_cast<int64_t>(out.dtype()), block_size},
         [&](auto list_tag) {
           using T = TypeMapType<Backend::kDeviceType, ListGet<0>(list_tag)>;
