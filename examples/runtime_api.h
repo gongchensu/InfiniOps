@@ -10,6 +10,9 @@
 #elif WITH_ILUVATAR
 #include "native/cuda/iluvatar/ops/gemm/cublas.h"
 #include "native/cuda/iluvatar/runtime_.h"
+#elif WITH_HYGON
+#include "hygon/gemm/cublas.h"
+#include "hygon/runtime_.h"
 #elif WITH_METAX
 #include "native/cuda/metax/ops/gemm/mcblas.h"
 #include "native/cuda/metax/runtime_.h"
@@ -35,6 +38,8 @@ namespace infini::ops {
 using DefaultRuntimeUtils = Runtime<Device::Type::kNvidia>;
 #elif WITH_ILUVATAR
 using DefaultRuntimeUtils = Runtime<Device::Type::kIluvatar>;
+#elif WITH_HYGON
+using DefaultRuntimeUtils = Runtime<Device::Type::kHygon>;
 #elif WITH_METAX
 using DefaultRuntimeUtils = Runtime<Device::Type::kMetax>;
 #elif WITH_CAMBRICON
