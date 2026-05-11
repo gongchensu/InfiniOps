@@ -10,9 +10,9 @@
 #include <cuda_runtime.h>
 // clang-format on
 
-#include "cuda/caster.cuh"
 #include "data_type.h"
 #include "device.h"
+#include "native/cuda/caster.cuh"
 
 namespace infini::ops {
 

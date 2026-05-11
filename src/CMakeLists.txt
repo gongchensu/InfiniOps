@@ -79,12 +79,12 @@ endif()
 
 if(WITH_HYGON)
     set(HYGON_PATTERNS
-        "cuda/*.cc"
-        "cuda/*.cpp"
-        "cuda/*.cu"
-        "hygon/*.cc"
-        "hygon/*.cpp"
-        "hygon/*.cu"
+        "native/cuda/*.cc"
+        "native/cuda/*.cpp"
+        "native/cuda/*.cu"
+        "native/cuda/hygon/*.cc"
+        "native/cuda/hygon/*.cpp"
+        "native/cuda/hygon/*.cu"
     )
 
     file(GLOB_RECURSE HYGON_SOURCES CONFIGURE_DEPENDS ${HYGON_PATTERNS})

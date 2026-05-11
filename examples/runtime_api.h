@@ -11,8 +11,8 @@
 #include "native/cuda/iluvatar/ops/gemm/cublas.h"
 #include "native/cuda/iluvatar/runtime_.h"
 #elif WITH_HYGON
-#include "hygon/gemm/cublas.h"
-#include "hygon/runtime_.h"
+#include "native/cuda/hygon/ops/gemm/cublas.h"
+#include "native/cuda/hygon/runtime_.h"
 #elif WITH_METAX
 #include "native/cuda/metax/ops/gemm/mcblas.h"
 #include "native/cuda/metax/runtime_.h"

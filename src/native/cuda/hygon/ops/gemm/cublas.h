@@ -1,8 +1,8 @@
 #ifndef INFINI_OPS_HYGON_GEMM_CUBLAS_H_
 #define INFINI_OPS_HYGON_GEMM_CUBLAS_H_
 
-#include "cuda/gemm/blas.h"
-#include "hygon/blas.h"
+#include "native/cuda/hygon/blas.h"
+#include "native/cuda/ops/gemm/blas.h"
 
 namespace infini::ops {
 

@@ -1,8 +1,8 @@
 #ifndef INFINI_OPS_HYGON_ADD_KERNEL_H_
 #define INFINI_OPS_HYGON_ADD_KERNEL_H_
 
-#include "cuda/add/kernel.h"
-#include "hygon/runtime_.h"
+#include "native/cuda/hygon/runtime_.h"
+#include "native/cuda/ops/add/kernel.h"
 
 namespace infini::ops {
 
