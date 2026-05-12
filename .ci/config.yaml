@@ -164,7 +164,7 @@ platforms:
           timeout: 3600
         stages:
           - name: test
-            run: pytest tests/test_add.py tests/test_gemm.py --devices hygon -n 4 -v --tb=short --junitxml=/workspace/results/test-results.xml
+            run: pytest tests/ --devices hygon -n 4 -v --tb=short --junitxml=/workspace/results/test-results.xml
 
   ascend:                                  # TODO: Ascend image is not ready yet.
     image:
