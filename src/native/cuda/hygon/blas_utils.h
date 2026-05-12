@@ -19,8 +19,7 @@ struct BlasUtils<Device::Type::kHygon> {
   }
 
   static auto GetComputeType(DataType dtype) {
-    if (dtype == DataType::kFloat16 || dtype == DataType::kBFloat16)
-      return CUBLAS_COMPUTE_32F;
+    (void)dtype;
     return CUBLAS_COMPUTE_32F;
   }
 };

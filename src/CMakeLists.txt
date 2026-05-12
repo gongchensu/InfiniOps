@@ -423,12 +423,6 @@ if(GENERATE_PYTHON_BINDINGS)
         list(APPEND _INFINIOPS_INSTALL_RPATH ${TORCH_RUNTIME_DIRS})
     endif()
 
-    if(WITH_HYGON)
-        list(APPEND _INFINIOPS_INSTALL_RPATH
-            "${HYGON_CUDA_ROOT}/lib64"
-        )
-    endif()
-
     set_target_properties(infiniops PROPERTIES INSTALL_RPATH "${_INFINIOPS_INSTALL_RPATH}")
     set_target_properties(ops PROPERTIES INSTALL_RPATH "${_INFINIOPS_INSTALL_RPATH}")
 
