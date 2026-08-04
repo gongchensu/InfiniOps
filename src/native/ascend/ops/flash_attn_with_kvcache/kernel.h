@@ -15,7 +15,9 @@
 #include "base/flash_attn_with_kvcache.h"
 #include "native/ascend/common.h"
 #include "native/ascend/workspace_pool_.h"
+#include "graph_capture_handle.h"
 #include "operator.h"
+#include <stdexcept>
 
 #ifdef INFINILM_ENABLE_CUSTOM_PAGED_ATTENTION
 #include "aclrtlaunch_infinilm_paged_attention_bf16_i32.h"
@@ -261,14 +263,38 @@ class Operator<FlashAttnWithKvcache, Device::Type::kAscend>
       return;
     }
 #endif
-    auto actual_seq_lengths =
-        MakeSeqLengths(cache_seqlens, scalar_cache_seqlens, stream);
+    const auto* capture =
+        dynamic_cast<const GraphCaptureHandle*>(handle_ptr_.get());
+    const std::vector<int64_t>* lengths = nullptr;
+    if (capture && cache_seqlens) {
+      if (capture->input != cache_seqlens->data() ||
+          capture->values.size() != batch_size_) {
+        throw std::invalid_argument("Missing captured KV sequence lengths.");
+      }
+      lengths = &capture->values;
+    }
+    RunVendor(q, k_cache, v_cache, cache_seqlens, scalar_cache_seqlens,
+              block_table, softmax_scale, out, lengths, capture, nullptr);
+  }
+
+  void RunVendor(const Tensor q, const Tensor k_cache, const Tensor v_cache,
+                 const std::optional<Tensor> cache_seqlens,
+                 const std::optional<int64_t> scalar_cache_seqlens,
+                 const std::optional<Tensor> block_table,
+                 const std::optional<double> softmax_scale, Tensor out,
+                 const std::vector<int64_t>* lengths,
+                 const GraphCaptureHandle* capture, aclrtTaskGrp group) const {
+    auto stream = static_cast<aclrtStream>(stream_);
+    auto actual_seq_lengths = lengths
+        ? aclCreateIntArray(lengths->data(), lengths->size())
+        : MakeSeqLengths(cache_seqlens, scalar_cache_seqlens, stream);
     assert(!paged_ || actual_seq_lengths != nullptr &&
                           "Ascend paged attention requires sequence lengths");
 
     auto max_cache_length = static_cast<int64_t>(
         paged_ ? block_table->size(1) * k_cache.size(1) : k_cache.size(1));
-    assert(std::all_of(seq_i64_host_.begin(), seq_i64_host_.end(),
+    const auto& active_lengths = lengths ? *lengths : seq_i64_host_;
+    assert(std::all_of(active_lengths.begin(), active_lengths.end(),
                        [&](int64_t length) {
                          return length >= 0 && length <= max_cache_length;
                        }) &&
@@ -309,18 +335,39 @@ class Operator<FlashAttnWithKvcache, Device::Type::kAscend>
         nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
         t_block_table, nullptr, num_heads, scale, layout, num_kv_heads,
         block_size, 0, t_out, &workspace_size, &executor);
-    assert(ret == ACL_SUCCESS &&
-           "Ascend `FlashAttnWithKvcache` workspace query failed");
+    auto destroy_args = [&] {
+      aclDestroyTensorList(key_list);
+      aclDestroyTensorList(value_list);
+      if (actual_seq_lengths) aclDestroyIntArray(actual_seq_lengths);
+    };
+    if (ret != ACL_SUCCESS) {
+      destroy_args();
+      throw std::runtime_error("Ascend attention workspace query failed: " +
+                               std::to_string(ret));
+    }
 
     auto& arena = ascend::GetWorkspacePool().Ensure(stream, workspace_size);
-    ret =
-        aclnnIncreFlashAttentionV4(arena.buf, workspace_size, executor, stream);
-    assert(ret == ACL_SUCCESS &&
-           "Ascend `FlashAttnWithKvcache` execution failed");
-
-    aclDestroyTensorList(key_list);
-    aclDestroyTensorList(value_list);
-    if (actual_seq_lengths) aclDestroyIntArray(actual_seq_lengths);
+    const bool recording_group = capture && lengths;
+    aclError status = ACL_SUCCESS;
+    if (group) status = aclmdlRICaptureTaskUpdateBegin(stream, group);
+    if (recording_group) status = aclmdlRICaptureTaskGrpBegin(stream);
+    if (status == ACL_SUCCESS) {
+      ret = aclnnIncreFlashAttentionV4(arena.buf, workspace_size, executor, stream);
+      if (group) status = aclmdlRICaptureTaskUpdateEnd(stream);
+      if (recording_group) status = aclmdlRICaptureTaskGrpEnd(stream, &group);
+    }
+    destroy_args();
+    if (status != ACL_SUCCESS || ret != ACL_SUCCESS) {
+      throw std::runtime_error("Ascend attention task failed: " +
+                               std::to_string(status != ACL_SUCCESS ? status : ret));
+    }
+    if (recording_group) {
+      if (!group) throw std::runtime_error("Missing Ascend attention task group.");
+      capture->updates.emplace_back([=] {
+        RunVendor(q, k_cache, v_cache, cache_seqlens, scalar_cache_seqlens,
+                  block_table, softmax_scale, out, lengths, nullptr, group);
+      });
+    }
   }
 
 #ifdef INFINILM_ENABLE_CUSTOM_PAGED_ATTENTION
