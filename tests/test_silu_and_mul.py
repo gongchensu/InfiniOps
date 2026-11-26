@@ -53,6 +53,28 @@ def test_silu_and_mul(
     )
 
 
+@pytest.mark.parametrize("offset", [0, 1])
+def test_silu_and_mul_bf16_partial_tile(device, implementation_index, offset):
+    if device != "cuda":
+        pytest.skip("CUDA BF16 packed row regression")
+
+    # Same shape and strides, different base alignment. A cached operator
+    # must check the actual pointers before issuing vector loads/stores.
+    rows, width = 17, 1032
+    x = torch.randn(rows * 2 * width + offset, dtype=torch.bfloat16, device=device)
+    x = x[offset:].view(rows, 2 * width)
+    backing = torch.full(
+        (rows * width + offset + 1,), -9, dtype=x.dtype, device=device
+    )
+    out = backing[offset : offset + rows * width].view(rows, width)
+    expected = (torch.nn.functional.silu(x[:, :width].float()) * x[:, width:]).to(x.dtype)
+    _silu_and_mul(x, out, implementation_index)
+    torch.testing.assert_close(out, expected, rtol=0.008, atol=1e-5)
+    assert backing[-1].item() == -9
+    if offset:
+        assert backing[0].item() == -9
+
+
 def test_silu_and_mul_non_default_stream(device, implementation_index):
     if device == "cuda":
         accelerator = torch.cuda
