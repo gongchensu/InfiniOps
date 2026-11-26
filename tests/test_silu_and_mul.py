@@ -55,8 +55,10 @@ def test_silu_and_mul(
 
 @pytest.mark.parametrize("offset", [0, 1])
 def test_silu_and_mul_bf16_partial_tile(device, implementation_index, offset):
-    if device != "cuda":
-        pytest.skip("CUDA BF16 packed row regression")
+    if device != "cuda" or implementation_index not in (
+        infini.ops.SiluAndMul.active_implementation_indices("nvidia")
+    ):
+        pytest.skip("NVIDIA BF16 packed row regression")
 
     # Same shape and strides, different base alignment. A cached operator
     # must check the actual pointers before issuing vector loads/stores.
