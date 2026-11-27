@@ -65,7 +65,14 @@ class Operator<ReshapeAndCacheFlash, Device::Type::kAscend>
     if (indices_device_) aclrtFree(indices_device_);
   }
 
-  bool capture_safe() const override { return true; }
+  bool capture_safe() const override {
+#ifdef INFINI_HAS_CUSTOM_KERNELS
+    return true;
+#else
+    // The fallback reads slot_mapping on the host on each invocation.
+    return num_tokens_ == 0 || use_fast_path_;
+#endif
+  }
 
   void operator()(const Tensor key, const Tensor value,
                   const Tensor slot_mapping, const Tensor /*k_scale*/,
